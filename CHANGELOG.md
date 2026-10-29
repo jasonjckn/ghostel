@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Kitty graphics images keep their transparency: an image with a
+  transparent pixel reaches Emacs as PNG instead of PPM, which has no
+  alpha, so transparent areas show the background instead of black
+  (custom emoji and logos on a light theme drew black boxes).
+
 ## [0.62.0] — 2026-11-07
 
 ### Added
