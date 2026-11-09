@@ -139,7 +139,7 @@ fn emitVirtualRun(
     const pin_screen = t.screens.active.pages.pointFromPin(.screen, run.pin) orelse return error.NotVisible;
 
     const val = images.get(run.image_id) orelse val: {
-        const data = try getImageData(term.alloc, image, ppm.Rect.full(image.width, image.height));
+        const data = try getImageData(term.alloc, image, ppm.Rect.full(image.width, image.height), pngAvailable(env, image));
         defer term.alloc.free(data);
         const v = env.makeUnibyteString(data) orelse return error.MakeString;
         try images.put(term.alloc, run.image_id, v);
@@ -227,7 +227,8 @@ fn emitPinned(
 
     // Emacs crops only post-scale, so crop before it sees the pixels.
     const src = placement.sourceRect(image.*);
-    const data = try getImageData(term.alloc, image, .{ .x = src.x, .y = src.y, .width = src.width, .height = src.height });
+    const rect: ppm.Rect = .{ .x = src.x, .y = src.y, .width = src.width, .height = src.height };
+    const data = try getImageData(term.alloc, image, rect, pngAvailable(env, image));
     defer term.alloc.free(data);
 
     const img_val = env.makeUnibyteString(data) orelse return error.MakeString;
@@ -242,9 +243,19 @@ fn emitPinned(
     });
 }
 
+/// Whether Emacs can display IMAGE as PNG.  Formats without alpha
+/// always go out as PPM, so they skip the Elisp call.
+fn pngAvailable(env: emacs.Env, image: *const gt.kitty.graphics.Image) bool {
+    return switch (image.format) {
+        .rgba, .gray_alpha => env.isNotNil(env.f("image-type-available-p", .{emacs.sym.png})),
+        else => false,
+    };
+}
+
 /// Image bytes of the RECT sub-rectangle of IMAGE, owned by `alloc`:
-/// PNG when RECT has a transparent pixel (PPM has no alpha), else PPM.
-fn getImageData(alloc: Allocator, image: *const gt.kitty.graphics.Image, rect: ppm.Rect) ![]const u8 {
+/// PNG when RECT has a transparent pixel (PPM has no alpha) and PNG_OK
+/// says Emacs can display PNG, else PPM.
+fn getImageData(alloc: Allocator, image: *const gt.kitty.graphics.Image, rect: ppm.Rect, png_ok: bool) ![]const u8 {
     // Decompression happens at transmit time; anything else is a libghostty change.
     if (image.compression != .none) return error.UnsupportedCompression;
     // Chunked transmissions still in flight have no complete bytes yet.
@@ -258,7 +269,7 @@ fn getImageData(alloc: Allocator, image: *const gt.kitty.graphics.Image, rect: p
         .gray_alpha => 2,
         .gray => 1,
     };
-    if (png.hasTransparency(data, image.width, image.height, channels, rect))
+    if (png.wantsPng(data, image.width, image.height, channels, rect, png_ok))
         return png.encode(alloc, data, image.width, image.height, channels, rect) orelse error.PngEncode;
     return ppm.createPpm(alloc, data, image.width, image.height, channels, rect) orelse error.PpmConvert;
 }

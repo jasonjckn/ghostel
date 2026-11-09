@@ -80,6 +80,13 @@ pub fn hasTransparency(data: []const u8, width: u32, height: u32, channels: u32,
     return false;
 }
 
+/// Whether to send the RECT sub-rectangle as PNG rather than PPM: it
+/// has a transparent pixel and PNG_OK says Emacs can display PNG.
+/// Without PNG support the image still shows as PPM, alpha dropped.
+pub fn wantsPng(data: []const u8, width: u32, height: u32, channels: u32, rect: ppm.Rect, png_ok: bool) bool {
+    return png_ok and hasTransparency(data, width, height, channels, rect);
+}
+
 /// Encode the RECT sub-rectangle of WIDTH x HEIGHT gray+alpha (CHANNELS
 /// 2) or RGBA (CHANNELS 4) pixel data as an 8-bit RGBA PNG.
 ///
@@ -297,4 +304,13 @@ test "hasTransparency: only for non-opaque alpha" {
     try testing.expect(hasTransparency(&clear_px, 2, 1, 4, ppm.Rect.full(2, 1)));
     try testing.expect(!hasTransparency(&clear_px, 2, 1, 4, .{ .x = 0, .y = 0, .width = 1, .height = 1 }));
     try testing.expect(!hasTransparency(opaque_px[0..3], 1, 1, 3, ppm.Rect.full(1, 1)));
+}
+
+test "wantsPng: transparent pixel and PNG support" {
+    const opaque_px = [_]u8{ 1, 2, 3, 0xFF, 4, 5, 6, 0xFF };
+    const clear_px = [_]u8{ 1, 2, 3, 0xFF, 4, 5, 6, 0x00 };
+    const r = ppm.Rect.full(2, 1);
+    try testing.expect(wantsPng(&clear_px, 2, 1, 4, r, true));
+    try testing.expect(!wantsPng(&clear_px, 2, 1, 4, r, false));
+    try testing.expect(!wantsPng(&opaque_px, 2, 1, 4, r, true));
 }

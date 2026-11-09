@@ -22,7 +22,8 @@ pub const Rect = struct {
 /// the image.
 ///
 /// Alpha is dropped, not composited: `kitty_graphics` sends images
-/// with transparent pixels as PNG (`png.encode`) instead.
+/// with transparent pixels as PNG (`png.encode`) instead, unless Emacs
+/// can't display PNG (`png.wantsPng`).
 ///
 /// Returns an allocated slice owned by the caller-supplied allocator.
 pub fn createPpm(
